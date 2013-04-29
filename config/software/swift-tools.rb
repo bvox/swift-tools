@@ -38,6 +38,7 @@ build do
   Dir["#{Omnibus::Config.project_root}/scripts/*"].each do |s|
     sname = File.basename(s)
     dest = "#{install_dir}/bin/#{sname}"
+    FileUtils.mkdir_p "#{install_dir}/bin/"
     File.open(dest, 'w') do |f|
       f.puts "#!#{install_dir}/embedded/bin/ruby"
       f.puts File.read(s)
