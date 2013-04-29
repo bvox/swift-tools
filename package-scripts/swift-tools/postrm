@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# Perform necessary swift-tools removal steps
+# after package is uninstalled.
+#
+
+echo "swift-tools has been uninstalled!"
+
+exit 0

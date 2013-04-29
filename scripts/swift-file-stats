@@ -1,0 +1,73 @@
+#!/usr/bin/env ruby
+require 'fileutils'
+require 'find'
+
+tstart = Time.now
+
+account_conf = '/etc/swift/account-server.conf'
+object_conf = '/etc/swift/object-server.conf'
+container_conf = '/etc/swift/container-server.conf'
+
+# Find all device paths in case they're different
+device_dirs = []
+[account_conf, object_conf, container_conf].each do |path|
+  device_dirs << File.read(path).match(/^devices\s*=\s*(.*)$/)[1]
+end
+
+device_dirs.uniq!
+
+mount_paths = []
+device_dirs.each do |dir|
+  mount_paths += Dir["#{dir}/*"].reject { |d| !File.directory?(d) }
+end
+
+puts "#{mount_paths.size} mount paths found in [#{device_dirs.join(',')}]"
+
+total = 0
+objects = 0
+account_dbs = 0
+container_dbs = 0
+ts_files = 0
+pending_files = 0
+partitions = 0
+other = 0
+pending_empty = 0
+
+mount_paths.each do |dev|
+  puts "Device #{File.basename(dev)} "
+  partitions += Dir.glob("#{dev}/{object,account,containers}/*").size 
+  Find.find(dev) do |path| 
+    next if File.directory?(path)
+    if path =~ /accounts\/.*\.db$/
+      account_dbs += 1
+    elsif path =~ /containers\/.*\.db$/
+      container_dbs += 1
+    elsif path =~ /\.data$/
+      objects += 1
+    elsif path =~ /\.pending$/
+      pending_files += 1
+      pending_empty += 1 if File.size(path) == 0
+    elsif path =~ /\.ts$/
+      ts_files += 1
+    else
+      other += 1
+    end
+    total += 1
+  end
+  puts "  total files: #{total}, partitions: #{partitions}"
+  puts "  accounts: #{account_dbs}, containers: #{container_dbs}, objects: #{objects}"
+  puts "  pending: #{pending_files} (#{pending_empty} empty), tombstone: #{ts_files}, other: #{other}"
+
+end
+
+puts
+puts "#{total} total files found, #{partitions} partitions"
+puts "#{account_dbs} account databases"
+puts "#{container_dbs} container databases"
+puts "#{objects} objects"
+puts "#{pending_files} pending files (#{pending_empty} empty)"
+puts "#{ts_files} tombstone files"
+puts "#{other} other files"
+puts
+
+puts "Script execution took %.2f s" % (Time.now - tstart)
