@@ -19,12 +19,13 @@ name "swift-tools"
 
 dependency "libxml2"
 dependency "libxslt"
+dependency "sqlite3"
 dependency "ruby"
 dependency "rubygems"
 dependency "yajl"
 dependency "bundler"
 
-gem_deps = %w[fog colored thor]
+gem_deps = %w[fog sequel sqlite3 colored thor]
 
 relative_path "swift-tools"
 always_build true
