@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+#
+# This script is intended to be run in a swift storage
+# node.
+#
+require 'sequel'
+require 'fog'
+require 'thor'
+
+class CLI < Thor
+  
+  default_task :execute
+
+  no_tasks do
+    def identity(insecure = false)
+      %w{OS_PASSWORD OS_USERNAME OS_AUTH_URL}.each do |env|
+        if ENV[env].nil?
+          raise "Missing #{env} environment variable."
+        end
+      end
+      return @id if @id
+      auth_url = ENV['OS_AUTH_URL'] + "/tokens"
+      user = ENV['OS_USERNAME']
+      password = ENV['OS_PASSWORD']
+
+      Excon.defaults[:ssl_verify_peer] = !insecure
+      begin
+        @id = Fog::Identity.new :provider => 'OpenStack',
+                                :openstack_auth_url => auth_url,
+                                :openstack_username => user,
+                                :openstack_api_key  => password
+      rescue Excon::Errors::SocketError => e
+        if e.message =~ /OpenSSL::SSL::SSLError/
+          raise "OpenSSL error. Is the certificate valid? Try with --insecure otherwise."
+        
+        else
+          raise e
+        end
+      end
+    end
+
+    def get_tenant(account, insecure = false)
+      identity(insecure).tenants.find { |t| t.id == account.split('_').last }
+    end
+  end
+
+
+  desc "execute", "Run the script (default command)"
+  option :insecure, :default => false
+  def execute
+    replica_count = {}
+
+    puts "Searching in every account database..."
+    Dir['/srv/node/*/accounts/**/*.db'].each do |db|
+      db = Sequel.connect "sqlite://#{db}"
+      db[:account_stat].each do |ds|
+        account = ds[:account]
+        replica_count[account] ||= {}
+        replica_count[account][:replicas] ||= 0
+        replica_count[account][:replicas] += 1
+        next if replica_count[account][:replicas] >= 2
+
+        t = get_tenant(account, options[:insecure])
+        if t
+          replica_count[account][:tenant_name] = t.name 
+        else
+          replica_count[account][:tenant_name] = 'Not Found'
+        end
+      end
+    end
+
+    replica_count.each do |account, v|
+      puts "#{account.ljust(40)} #{v[:tenant_name]} (#{v[:replicas]} replicas)"
+    end
+  end
+
+end
+
+# Global rescue so we can print
+# nice errors instead of backtraces.
+at_exit do
+  e = $!
+  puts e if e
+  exit! unless ENV['DEBUG']
+end
+
+CLI.start
