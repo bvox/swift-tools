@@ -23,6 +23,54 @@ end
 
 puts "#{mount_paths.size} mount paths found in [#{device_dirs.join(',')}]"
 
+dev_stats = {}
+
+mount_paths.each do |dev|
+  puts "Device #{File.basename(dev)} "
+  part_num = Dir.glob("#{dev}/{object,account,containers}/*").size 
+  dev_stats[dev] = { 
+    :total => 0,
+    :partitions => part_num,
+    :account_dbs => 0,
+    :container_dbs => 0,
+    :objects => 0,
+    :pending_files => 0,
+    :pending_empty => 0,
+    :ts_files => 0,
+    :other => 0
+  }
+  Find.find(dev) do |path| 
+    next if File.directory?(path)
+    if path =~ /accounts\/.*\.db$/
+      dev_stats[dev][:account_dbs] += 1
+    elsif path =~ /containers\/.*\.db$/
+      dev_stats[dev][:container_dbs] += 1
+    elsif path =~ /\.data$/
+      dev_stats[dev][:objects] += 1
+    elsif path =~ /\.pending$/
+      dev_stats[dev][:pending_files] += 1
+      dev_stats[dev][:pending_empty] += 1
+    elsif path =~ /\.ts$/
+      dev_stats[dev][:ts_files] += 1
+    else
+      dev_stats[dev][:other] += 1
+    end
+    dev_stats[dev][:total] += 1
+  end
+
+  puts "  total files: #{dev_stats[dev][:total]}, " +
+       "partitions: #{dev_stats[dev][:partitions]}"
+
+  puts "  account dbs: #{dev_stats[dev][:account_dbs]}, " +
+       "container dbs: #{dev_stats[dev][:container_dbs]}, " +
+       "objects: #{dev_stats[dev][:objects]}"
+
+  puts "  pending: #{dev_stats[dev][:pending_files]} " +
+       "(#{dev_stats[dev][:pending_empty]} empty), " +
+       "tombstone: #{dev_stats[dev][:ts_files]}, other: #{dev_stats[dev][:other]}"
+
+end
+
 total = 0
 objects = 0
 account_dbs = 0
@@ -33,32 +81,15 @@ partitions = 0
 other = 0
 pending_empty = 0
 
-mount_paths.each do |dev|
-  puts "Device #{File.basename(dev)} "
-  partitions += Dir.glob("#{dev}/{object,account,containers}/*").size 
-  Find.find(dev) do |path| 
-    next if File.directory?(path)
-    if path =~ /accounts\/.*\.db$/
-      account_dbs += 1
-    elsif path =~ /containers\/.*\.db$/
-      container_dbs += 1
-    elsif path =~ /\.data$/
-      objects += 1
-    elsif path =~ /\.pending$/
-      pending_files += 1
-      pending_empty += 1 if File.size(path) == 0
-    elsif path =~ /\.ts$/
-      ts_files += 1
-    else
-      other += 1
-    end
-    total += 1
-  end
-  puts "  total files: #{total}, partitions: #{partitions}"
-  puts "  accounts: #{account_dbs}, containers: #{container_dbs}, objects: #{objects}"
-  puts "  pending: #{pending_files} (#{pending_empty} empty), tombstone: #{ts_files}, other: #{other}"
-
-end
+dev_stats.each { |dev, values| total += values[:total] }
+dev_stats.each { |dev, values| objects += values[:objects] }
+dev_stats.each { |dev, values| account_dbs += values[:account_dbs] }
+dev_stats.each { |dev, values| container_dbs += values[:container_dbs] }
+dev_stats.each { |dev, values| ts_files += values[:ts_files] }
+dev_stats.each { |dev, values| pending_files += values[:pending_files] }
+dev_stats.each { |dev, values| pending_empty += values[:pending_empty] }
+dev_stats.each { |dev, values| other += values[:other] }
+dev_stats.each { |dev, values| partitions += values[:partitions] }
 
 puts
 puts "#{total} total files found, #{partitions} partitions"
