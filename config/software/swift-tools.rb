@@ -24,15 +24,20 @@ dependency "rubygems"
 dependency "yajl"
 dependency "bundler"
 
-gem_deps = %w[fog colored]
+gem_deps = %w[fog colored thor]
 
 relative_path "swift-tools"
-#always_build true
+always_build true
+
+env = {
+    "CFLAGS" => "-L#{install_dir}/embedded/lib -I#{install_dir}/embedded/include",
+    "LDFLAGS" => "-Wl,-rpath #{install_dir}/embedded/lib -L#{install_dir}/embedded/lib -I#{install_dir}/embedded/include"
+}
 
 build do
   # Install required gem deps
-  gem_deps.each do |gem|
-    gem "install colored -n #{install_dir}/bin --no-rdoc --no-ri"
+  gem_deps.each do |g|
+    gem "install #{g} -n #{install_dir}/bin --no-rdoc --no-ri", :env => env
   end
 
   Dir["#{Omnibus::Config.project_root}/scripts/*"].each do |s|
