@@ -48,10 +48,13 @@ class CLI < Thor
   desc "execute", "Run the script (default command)"
   option :insecure, :default => false
   def execute
+    tstart = Time.now
     replica_count = {}
 
     puts "Searching in every account database..."
-    Dir['/srv/node/*/accounts/**/*.db'].each do |db|
+    dbs = Dir['/srv/node/*/accounts/**/*.db']
+    puts "#{dbs.size} account databases found (including replicas)"
+    dbs.each do |db|
       db = Sequel.connect "sqlite://#{db}"
       db[:account_stat].each do |ds|
         account = ds[:account]
@@ -72,6 +75,11 @@ class CLI < Thor
     replica_count.each do |account, v|
       puts "#{account.ljust(40)} #{v[:tenant_name]} (#{v[:replicas]} replicas)"
     end
+
+    puts
+    puts "Accounts found: #{replica_count.size}"
+    puts "Time taken: #{'%.2f' % (Time.now - tstart)} s"
+    puts
   end
 
 end
@@ -80,7 +88,7 @@ end
 # nice errors instead of backtraces.
 at_exit do
   e = $!
-  puts e if e
+  puts "FATAL: #{e}" if e
   exit! unless ENV['DEBUG']
 end
 
